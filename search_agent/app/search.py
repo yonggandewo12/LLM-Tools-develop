@@ -53,9 +53,9 @@ def web_search(query: str) -> str | None:
     else:
         return tavily_search(query)
 
-from langchain.tools import Tool
-search_tool = Tool(
-    name="web_search",
-    func=web_search,
-    description="联网搜索"
-)
+from langchain.tools import tool
+
+@tool
+def search_tool(query: str) -> str:
+    """联网搜索工具，根据用户问题搜索相关信息。"""
+    return web_search(query) or "搜索不可用"
