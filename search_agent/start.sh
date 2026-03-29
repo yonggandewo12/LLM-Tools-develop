@@ -15,7 +15,7 @@ pkill -f "uvicorn main:app"
 sleep 1
 
 echo "🚀 启动新服务..."
-nohup uvicorn main:app \
+nohup python3 -m uvicorn main:app \
   --host "$SERVER_HOST" \
   --port "$SERVER_PORT" \
   --log-level "$LOG_LEVEL" \

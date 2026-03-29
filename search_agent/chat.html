@@ -22,10 +22,23 @@
 <div class="input-bar">
     <input id="query" placeholder="输入问题..." autocomplete="off"/>
     <button onclick="send()">发送</button>
+    <button onclick="clearSession()" style="background:#ff3b30">清除会话</button>
 </div>
 
 <script>
-    const apiBase = 'http://localhost:8000'
+    const apiBase = window.location.origin
+    // 生成/获取会话ID，存储到localStorage
+    function getSessionId() {
+      let sessionId = localStorage.getItem('chat_session_id')
+      if (!sessionId) {
+        sessionId = 'sess_' + Math.random().toString(36).substring(2, 15)
+        localStorage.setItem('chat_session_id', sessionId)
+      }
+      return sessionId
+    }
+
+    const sessionId = getSessionId()
+
     async function send() {
       const input = document.getElementById('query')
       const text = input.value.trim()
@@ -41,34 +54,48 @@
       messages.appendChild(botDiv)
       messages.scrollTop = messages.scrollHeight
 
-      const res = await fetch(`${apiBase}/api/chat?query=${encodeURIComponent(text)}`, {
-        method: 'POST'
-      })
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
+      try {
+        const res = await fetch(`${apiBase}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: text, session_id: sessionId})
+        })
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const content = line.replace('data: ', '').trim()
-            if (content) {
-              botDiv.textContent += content
-              messages.scrollTop = messages.scrollHeight
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const content = line.replace('data: ', '').trim()
+              if (content) {
+                botDiv.textContent += content
+                messages.scrollTop = messages.scrollHeight
+              }
             }
           }
         }
+      } catch (err) {
+        botDiv.textContent = '网络错误，请稍后重试'
+      } finally {
+        input.disabled = false
+        input.focus()
       }
-      input.disabled = false
-      input.focus()
     }
 
     document.getElementById('query').addEventListener('keydown', e => {
       if (e.key === 'Enter') send()
     })
+
+    // 清除会话功能
+    function clearSession() {
+      localStorage.removeItem('chat_session_id')
+      document.getElementById('messages').innerHTML = ''
+      alert('会话已清除，记忆已重置')
+    }
 </script>
 </body>
 </html>

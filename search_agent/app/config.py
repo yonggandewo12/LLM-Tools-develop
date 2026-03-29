@@ -13,8 +13,13 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "dummy")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.1))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 2048))
 
-SEARCH_ENGINE = os.getenv("SEARCH_ENGINE", "tavily").lower()
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-TAVILY_MAX_RESULTS = int(os.getenv("TAVILY_MAX_RESULTS", 5))
-SEARXNG_API_URL = os.getenv("SEARXNG_API_URL")
-SEARXNG_MAX_RESULTS = int(os.getenv("SEARXNG_MAX_RESULTS", 5))
+# 搜索引擎配置（当前固定为DuckDuckGo）
+SEARCH_ENGINE = os.getenv("SEARCH_ENGINE", "duckduckgo").lower()
+
+# DuckDuckGo搜索配置
+DDG_REGION = os.getenv("DDG_REGION", "zh-cn")
+DDG_MAX_RESULTS = int(os.getenv("DDG_MAX_RESULTS", 5))
+DDG_TIMEOUT = int(os.getenv("DDG_TIMEOUT", 10))
+
+# 记忆配置
+MEMORY_MAX_MESSAGES = int(os.getenv("MEMORY_MAX_MESSAGES", 10))

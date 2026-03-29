@@ -4,10 +4,11 @@
 
 ## 功能特性
 
-- **智能问答**: 结合搜索结果与本地 LLM 生成回答
-- **搜索增强**: 支持 SearXNG 自建搜索和 Tavily API
-- **自动降级**: 搜索不可用时自动切换为纯本地 LLM 回答
+- **智能问答**: 结合搜索结果与大语言模型生成回答
+- **免费搜索**: 基于 DuckDuckGo，无需 API 密钥，完全免费
+- **对话记忆**: 支持多会话，运行时记住对话上下文
 - **流式输出**: SSE 流式返回，响应速度快
+- **标准接口**: OpenAI 兼容格式 `/v1/chat/completions`
 
 ## 技术架构
 
@@ -15,28 +16,30 @@
 search_agent/
 ├── main.py              # FastAPI 入口
 ├── app/
-│   ├── agent.py         # LangChain Agent 实现
-│   ├── search.py        # 搜索实现 (SearXNG/Tavily)
-│   ├── llm.py          # LLM 客户端 (ChatOpenAI)
-│   └── config.py       # 配置加载
-├── requirements.txt    # 依赖
-├── .env                # 环境变量
-├── start.sh            # 启动脚本
+│   ├── agent.py         # LangChain Agent 实现（含记忆模块）
+│   ├── search.py        # DuckDuckGo 搜索实现
+│   ├── llm.py          # LLM 客户端（OpenAI 兼容）
+│   └── config.py        # 配置加载
+├── chat.html            # 前端聊天界面
+├── requirements.txt     # 依赖
+├── .env                 # 环境变量
+├── install.sh           # 安装依赖脚本
+├── start.sh             # 启动脚本
 └── stop.sh             # 停止脚本
 ```
 
 ## 快速开始
 
-### 安装依赖
+### 1. 安装依赖
 
 ```bash
 cd search_agent
-pip install -r requirements.txt
+./install.sh
 ```
 
-### 配置环境变量
+### 2. 配置环境变量
 
-编辑 `.env` 文件，配置以下内容：
+编辑 `.env` 文件：
 
 ```env
 # 服务配置
@@ -44,57 +47,57 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
 LOG_LEVEL=info
 
-# LLM 配置 (支持 Ollama 或其他 OpenAI 兼容 API)
-LLM_BASE_URL=http://localhost:11434/v1
-LLM_MODEL=qwen:7b
-LLM_TEMPERATURE=0.1
-LLM_MAX_TOKENS=2048
+# LLM 配置（支持 Ollama、火山引擎方舟、OpenAI 等）
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/chat/completions
+LLM_MODEL=doubao-seed-2-0-lite-260215
+LLM_API_KEY=your-api-key
+LLM_TEMPERATURE=0.2
 
-# 搜索配置 (二选一)
-SEARCH_ENGINE=searxng  # 或 tavily
-
-# SearXNG 配置
-SEARXNG_API_URL=http://127.0.0.1:8080
-SEARXNG_MAX_RESULTS=5
-
-# Tavily 配置
-TAVILY_API_KEY=your-tavily-api-key
-TAVILY_MAX_RESULTS=5
+# DuckDuckGo 搜索配置（可选）
+DDG_REGION=zh-cn
+DDG_MAX_RESULTS=5
+DDG_TIMEOUT=10
 ```
 
-### 启动服务
+### 3. 启动服务
 
 ```bash
-# 方式一：使用启动脚本
 ./start.sh
-
-# 方式二：手动启动
-source .env
-uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### 前置要求
+### 4. 访问使用
 
-1. **LLM 服务**: 需要运行 Ollama 或其他 OpenAI 兼容的 API 服务
-   ```bash
-   # Ollama 示例
-   ollama serve
-   ollama run qwen:7b
-   ```
-
-2. **搜索服务** (二选一):
-   - **SearXNG**: 自建搜索实例，参考 [SearXNG 官方文档](https://docs.searxng.org/)
-   - **Tavily**: 获取 API Key [tavily.com](https://tavily.com)
+| 功能 | 地址 |
+|------|------|
+| 聊天界面 | http://localhost:8000/v1/chat |
+| 接口文档 | http://localhost:8000/docs |
 
 ## API 接口
 
-### 健康检查
+### 聊天接口（OpenAI 兼容）
 
 ```bash
-GET /
+POST /v1/chat/completions
 ```
 
-返回 HTML 页面，显示服务状态。
+**请求体：**
+
+```json
+{
+  "query": "问题内容",
+  "session_id": "会话ID（可选，默认default）"
+}
+```
+
+**curl 示例：**
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"query": "什么是Python", "session_id": "test"}'
+```
+
+**响应：** SSE 流式返回
 
 ### 服务状态
 
@@ -103,77 +106,75 @@ GET /status
 ```
 
 返回：
+
 ```json
 {
   "status": "running",
-  "search_engine": "searxng",
-  "model": "qwen:7b"
+  "search_engine": "duckduckgo",
+  "model": "doubao-seed-2-0-lite-260215"
 }
-```
-
-### 智能问答
-
-```bash
-POST /api/chat?query=你的问题
-```
-
-流式返回回答。
-
-**curl 示例:**
-
-```bash
-curl -X POST "http://localhost:8000/api/chat?query=什么是人工智能"
 ```
 
 ## 工作原理
 
-1. 客户端发送问题到 `/api/chat`
-2. 服务首先尝试调用搜索工具获取联网信息
+1. 客户端发送问题到 `/v1/chat/completions`
+2. 服务调用 DuckDuckGo 搜索获取联网信息
 3. 若搜索成功：使用 LangChain Agent 结合搜索结果生成回答
 4. 若搜索失败：自动降级为纯本地 LLM 直接回答
 5. 通过 SSE 流式返回结果
+6. 对话内容保存在内存中，相同 session_id 可记住之前对话
+
+## 对话记忆
+
+- **多会话支持**：不同 session_id 对应独立记忆
+- **运行时有效**：服务运行时记忆有效，重启后丢失
+- **前端自动管理**：前端自动生成并保存 session_id 到 localStorage
+
+### 前端使用
+
+访问 http://localhost:8000/v1/chat 会自动：
+1. 生成会话 ID 并保存到本地存储
+2. 每次对话携带 session_id
+3. 多轮对话自动记住之前内容
+
+### 清除会话
+
+点击页面上的「清除会话」按钮可重置当前会话记忆。
 
 ## 错误处理
 
 | 场景 | 处理方式 |
 |------|----------|
-| 搜索服务不可用 | 自动降级为纯本地 LLM 回答 |
-| LLM 服务不可用 | 返回错误信息 |
-| 参数缺失 | FastAPI 自动验证并返回 422 错误 |
-
-## 扩展开发
-
-### 添加新的搜索后端
-
-在 `app/search.py` 中添加新的搜索函数：
-
-```python
-def new_search_engine(query: str) -> str | None:
-    # 实现搜索逻辑
-    pass
-
-# 在 web_search 函数中调用
-```
-
-### 调整 Agent Prompt
-
-修改 `app/agent.py` 中的 prompt 模板：
-
-```python
-prompt = ChatPromptTemplate.from_messages([
-    ("system", "你的新系统提示词"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
-```
+| 搜索不可用 | 自动降级为纯本地 LLM 回答 |
+| LLM 不可用 | 返回错误信息 |
+| 参数缺失 | FastAPI 自动验证返回 422 错误 |
+| 网络错误 | 前端显示"网络错误，请稍后重试" |
 
 ## 常见问题
 
 **Q: 搜索返回为空怎么办？**
-A: 检查 SearXNG 服务是否正常运行，或确认 Tavily API Key 是否有效。
+A: 检查网络连接是否正常，DuckDuckGo 是否可访问。
 
 **Q: LLM 响应很慢？**
-A: 尝试使用更小的模型，或检查本地 LLM 服务资源占用。
+A: 尝试使用更小的模型，或检查 LLM 服务资源占用。
+
+**Q: 对话记忆重启后丢失？**
+A: 当前为内存级记忆，重启服务会丢失。如需持久化可配置 PostgreSQL 存储。
 
 **Q: 如何修改端口？**
-A: 修改 `.env` 中的 `SERVER_PORT` 或在启动命令中指定：`uvicorn main:app --port 8080`
+A: 修改 `.env` 中的 `SERVER_PORT`，或启动时指定：`./start.sh`（默认8000）
+
+## 环境变量说明
+
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| SERVER_HOST | 0.0.0.0 | 服务监听地址 |
+| SERVER_PORT | 8000 | 服务监听端口 |
+| LLM_BASE_URL | - | LLM API 地址 |
+| LLM_MODEL | - | LLM 模型名称 |
+| LLM_API_KEY | - | LLM API 密钥 |
+| LLM_TEMPERATURE | 0.1 | LLM 温度参数 |
+| LLM_MAX_TOKENS | 2048 | LLM 最大 tokens |
+| DDG_REGION | zh-cn | DuckDuckGo 搜索区域 |
+| DDG_MAX_RESULTS | 5 | 搜索返回结果数 |
+| DDG_TIMEOUT | 10 | 搜索超时时间（秒） |
