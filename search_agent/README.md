@@ -10,6 +10,8 @@
 - **流式输出**: SSE 流式返回，响应速度快
 - **标准接口**: OpenAI 兼容格式 `/v1/chat/completions`
 
+> ⚠️ 当前为内存级记忆，服务重启后记忆会丢失，如需持久化请配置 PostgreSQL 存储
+
 ## 技术架构
 
 ```
@@ -47,16 +49,20 @@ SERVER_HOST=0.0.0.0
 SERVER_PORT=8000
 LOG_LEVEL=info
 
-# LLM 配置（支持 Ollama、火山引擎方舟、OpenAI 等）
+# LLM 配置（支持 Ollama、火山引擎方舟、OpenAI 等所有兼容 OpenAI 格式的服务）
 LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/chat/completions
 LLM_MODEL=doubao-seed-2-0-lite-260215
-LLM_API_KEY=your-api-key
+LLM_API_KEY=your-api-key-here
 LLM_TEMPERATURE=0.2
+LLM_MAX_TOKENS=2048
 
-# DuckDuckGo 搜索配置（可选）
+# DuckDuckGo 搜索配置（可选，无需 API 密钥）
 DDG_REGION=zh-cn
 DDG_MAX_RESULTS=5
 DDG_TIMEOUT=10
+
+# 记忆配置
+MEMORY_MAX_MESSAGES=10
 ```
 
 ### 3. 启动服务
@@ -118,11 +124,11 @@ GET /status
 ## 工作原理
 
 1. 客户端发送问题到 `/v1/chat/completions`
-2. 服务调用 DuckDuckGo 搜索获取联网信息
-3. 若搜索成功：使用 LangChain Agent 结合搜索结果生成回答
-4. 若搜索失败：自动降级为纯本地 LLM 直接回答
-5. 通过 SSE 流式返回结果
-6. 对话内容保存在内存中，相同 session_id 可记住之前对话
+2. LangChain Agent 自动处理：
+   - 自动调用 DuckDuckGo 搜索工具获取联网信息
+   - 结合历史对话上下文生成回答
+3. 通过 SSE 流式返回结果
+4. 对话内容保存在内存中，相同 session_id 可记住之前对话
 
 ## 对话记忆
 
