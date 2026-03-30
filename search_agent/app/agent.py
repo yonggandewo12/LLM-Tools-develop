@@ -1,56 +1,41 @@
+import os
+
 from langchain.agents import create_agent
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langchain_core.messages import trim_messages
+
 from app.llm import get_llm
-from app.search import search_tool, web_search
-from app.config import MEMORY_MAX_MESSAGES
-import os
-import asyncio
+from app.search import search_tool
 
 _llm = None
-_agent = None
-_checkpointer = None
-
-# 初始化异步SQLite持久化存储
 _db_path = os.path.join(os.path.dirname(__file__), "..", "chat_memory.db")
-_checkpointer = AsyncSqliteSaver.from_conn_string(_db_path)
 
-# 运行初始化创建表
-async def init_db():
-    async with _checkpointer as saver:
-        await saver.setup()
 
-asyncio.create_task(init_db())
-
-def _get_agent():
-    global _llm, _agent
+def _get_llm():
+    global _llm
     if _llm is None:
         _llm = get_llm()
-    if _agent is None:
-        _agent = create_agent(
-            model=_llm,
-            tools=[search_tool],
-            system_prompt="你是智能助手，可使用搜索工具。回答简洁、有条理，记住用户之前说过的内容。",
-            checkpointer=_checkpointer
-        )
-    return _agent
+    return _llm
+
 
 async def stream_answer(query: str, session_id: str = "default"):
-    """
-    流式回答用户问题，支持会话记忆
-    :param query: 用户问题
-    :param session_id: 会话ID，不同ID对应独立记忆
-    """
     config = {"configurable": {"thread_id": session_id}}
-    
-    # 统一走agent逻辑，自动处理搜索和记忆
-    agent = _get_agent()
-    async for event in agent.astream_events(
-        {"messages": [("user", query)]},
-        version="v1",
-        config=config
-    ):
-        if event["event"] == "on_chat_model_stream":
-            content = event["data"]["chunk"].content
-            if content:
-                yield f"data: {content}\n\n"
+    llm = _get_llm()
+
+    async with AsyncSqliteSaver.from_conn_string(_db_path) as checkpointer:
+        await checkpointer.setup()
+        agent = create_agent(
+            model=llm,
+            tools=[search_tool],
+            system_prompt="你是智能助手，可使用搜索工具。回答简洁、有条理，记住用户之前说过的内容。",
+            checkpointer=checkpointer,
+        )
+
+        async for event in agent.astream_events(
+            {"messages": [("user", query)]},
+            version="v1",
+            config=config,
+        ):
+            if event["event"] == "on_chat_model_stream":
+                content = event["data"]["chunk"].content
+                if content:
+                    yield f"data: {content}\n\n"
