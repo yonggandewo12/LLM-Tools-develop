@@ -1,14 +1,22 @@
 from langchain.agents import create_agent
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.messages import trim_messages
 from app.llm import get_llm
 from app.search import search_tool, web_search
 from app.config import MEMORY_MAX_MESSAGES
+import sqlite3
+import os
 
 _llm = None
 _agent = None
-# 内存级记忆（重启后丢失），如需持久化请用PostgreSQL
-_checkpointer = InMemorySaver()
+
+# SQLite持久化存储，重启后记忆不丢失
+_db_path = os.path.join(os.path.dirname(__file__), "..", "chat_memory.db")
+_conn = sqlite3.connect(_db_path, check_same_thread=False)
+_checkpointer = SqliteSaver(_conn)
+# 初始化数据库表
+_checkpointer.setup()
 
 def _get_agent():
     global _llm, _agent
