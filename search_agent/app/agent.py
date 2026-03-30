@@ -1,14 +1,26 @@
 from langchain.agents import create_agent
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langchain_core.messages import trim_messages
 from app.llm import get_llm
 from app.search import search_tool, web_search
 from app.config import MEMORY_MAX_MESSAGES
+import os
+import asyncio
 
 _llm = None
 _agent = None
-# 内存级记忆，运行时有效
-_checkpointer = InMemorySaver()
+_checkpointer = None
+
+# 初始化异步SQLite持久化存储
+_db_path = os.path.join(os.path.dirname(__file__), "..", "chat_memory.db")
+_checkpointer = AsyncSqliteSaver.from_conn_string(_db_path)
+
+# 运行初始化创建表
+async def init_db():
+    async with _checkpointer as saver:
+        await saver.setup()
+
+asyncio.create_task(init_db())
 
 def _get_agent():
     global _llm, _agent
